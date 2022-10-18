@@ -1,0 +1,3 @@
+uint8 request_type
+---
+uint8 result_mode

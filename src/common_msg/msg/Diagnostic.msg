@@ -1,0 +1,2 @@
+uint8 node_id
+uint8 diagnostic

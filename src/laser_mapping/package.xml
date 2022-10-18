@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>laser_mapping</name>
+  <version>0.0.1</version>
+  <description>using laser as main sensor to mapping</description>
+
+  <maintainer email="xxx@xxx.com">anson</maintainer>
+
+  <license>BSD</license>
+  <author>xxx</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf</depend>
+  <depend>roscpp</depend>
+  <depend>eigen</depend>
+  <depend>liblapack-dev</depend>
+  <depend>libblas-dev</depend>
+  <depend>suitesparse</depend>
+  <depend>common_msg</depend>
+
+</package>

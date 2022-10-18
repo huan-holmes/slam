@@ -1,0 +1,47 @@
+<launch>
+    <!--- 启动定位节点 -->
+    <node pkg="laser_localization" type="laser_localization_node" name="loc" output="screen">
+        <param name="ini_file" value="$(find laser_localization)/ini/pf-localization-20m.ini"/>
+        <param name="odom_frame_id" value="/odom"/>
+        <param name="global_frame_id" value="/map"/>
+        <param name="base_frame_id" value="/base_link"/>
+        <param name="simulation" value="true" />
+        <!--  spdlog 保存路径  -->
+        <param name="log_path" type="string" value="$(env HOME)/"/>
+        <!-- 粒子话题 -->
+        <remap from="particlecloud" to="/particlecloud"/>
+        <!-- 恢复、保存位置路径   -->
+        <param name="pose_record_file" value="$(env HOME)/.amcl_pose"/>
+        <!-- 是否订阅map的方式接收地图   -->
+        <param name="use_map_topic" value="true"/>
+        <!-- 当前粒子状态发布频率控制   -->
+        <param name="particlecloud_update_skip" value="1"/>
+        <!-- 是否启动机器静态时也使用激光更新当前位姿   -->
+        <param name="update_while_stopped" value="false"/>
+        <!-- 初始化阶段更新数，每次使用激光数据更新一次位姿算作一次更新，
+        系统设置初始化位姿后，开始计数，计数值小于该值之前，每次激光数据都会用于更新 -->
+        <param name="init_process_update_cnt" value="100"/>
+        <!-- ============ 运动更新控制 ============   -->
+        <!-- 前进多远更新 m -->
+        <param name="update_min_dist" value="0.05"/>
+        <!-- 旋转多少更新 deg -->
+        <param name="update_min_angle" value="1."/>
+        <!-- 机器静止的时候，使用激光更新位姿频率控制。例如设置为10，则在静止状态下，每接收到10个里程计数据就是使用激光更新当前位姿一次 -->
+        <param name="nomotion_update_skip" value="20"/>
+        <!-- ============ 运动更新控制 ============   -->
+        <!-- 是否打印调试信息 -->
+        <param name="debug" value="true"/>
+
+        <!-- 激光话题 -->
+        <param name="sensor_sources" value="scan"/>
+        <!-- 里程计话题 -->
+        <remap from="loc/odom" to="odom"/>
+        <!-- 地图话题 -->
+        <remap from="loc/map" to="map"/>
+        <!-- 初始位置 -->
+        <remap from="loc/initialpose" to="initialpose"/>
+
+    </node>
+
+</launch>
+

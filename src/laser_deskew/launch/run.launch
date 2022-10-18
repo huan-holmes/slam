@@ -1,0 +1,10 @@
+<launch>
+
+    <node pkg="laser_deskew" type="laser_deskew_node" name="laser_deskew_node" output="screen">
+        <!-- 输出的去畸变laserscan的topic name  -->
+        <param name="deskewed_topic_name" type="string" value="/scan_mapping"/>
+        <!--  spdlog 保存路径  -->
+        <param name="spdlog_path" type="string" value="/home/anson/"/>
+    </node>
+
+</launch>

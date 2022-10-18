@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mrpt_bridge</name>
+  <version>0.1.25</version>
+  <description>C++ library to convert between ROS messages and MRPT classes</description>
+
+  <maintainer email="jlblanco@ual.es">Jose-Luis Blanco-Claraco</maintainer>
+  <author email="markus.bader@tuwien.ac.at">Markus Bader</author>
+  <author email="raffi.z@gmail.com">Raphael Zack</author>
+
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/mrpt_bridge</url>
+
+  <!-- Use buildtool_depend for build tool packages: -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>tf</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>mrpt_msgs</depend>
+  <depend>nav_msgs</depend>
+
+</package>

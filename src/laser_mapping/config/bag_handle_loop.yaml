@@ -1,0 +1,57 @@
+
+# 设置激光有效距离
+mapping_max_scanRange: 40
+# 使用imu yaw补偿直线
+use_imu_correct: false
+use_scan_matching: true
+# 回环检测是否使用帧的中心作为判断依据
+use_scan_barycenter: true
+# 关键帧的间距，单位m
+minimum_travel_distance: 0.3
+# 关键帧的角度差，单位rad
+minimum_travel_heading: 0.628
+scan_buffer_size: 30
+running_scan: true
+scan_buffer_maximum_scan_distance: 9
+link_match_minimum_response_fine: 0.8
+link_scan_maximum_distance: 10.0
+# 回环检测距离门限
+# aces 3.0
+# intel 2.0
+# mit-killian 5.0
+loop_search_maximum_distance: 3.
+# 是否使能回环检测
+do_loop_closing: true
+loop_match_minimum_chain_size: 10
+loop_match_maximum_variance_coarse: 3.0
+loop_match_minimum_response_coarse: 0.25
+# 配准门限
+# aces 0.5
+# intel 0.6
+# mit-killian 0.76
+loop_match_minimum_response_fine: 0.5
+
+# 激光匹配寻找的空间
+correlation_search_space_dimension: 0.6
+# 匹配寻找的精匹配
+correlation_search_space_resolution: 0.01
+correlation_search_space_smear_deviation: 0.03
+
+loop_search_space_dimension: 8.0
+# 匹配寻找的精匹配
+loop_search_space_resolution: 0.05
+loop_search_space_smear_deviation: 0.03
+
+# Scan Matcher Parameters
+distance_variance_penalty: 0.3              # gets squared later
+angle_variance_penalty: 0.649               # in degrees (gets converted to radians then squared)
+fine_search_angle_offset: 0.00349           # in degrees (gets converted to radians)
+coarse_search_angle_offset: 0.329           # in degrees (gets converted to radians)  20/180*3.1415=0.34
+coarse_angle_resolution: 0.015              # in degrees (gets converted to radians) 默认1度
+minimum_angle_penalty: 0.9
+minimum_distance_penalty: 0.5
+use_response_expansion: false
+
+# 匹配无效门限值
+minimumMatchScore: 0.01
+validLaserPercentage: 0.0

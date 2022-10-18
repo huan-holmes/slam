@@ -1,0 +1,2 @@
+int8 type
+float32 rotate_angle_deg

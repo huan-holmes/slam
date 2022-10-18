@@ -1,0 +1,33 @@
+<launch>
+    <!--- Sim Time 相对时间 从0 开始计算时间-->
+    <param name="/use_sim_time" value="true"/>
+    <node pkg="map_server" name="map_server" type="map_server" args="$(find slam_test)/world/aces.yaml">
+    </node>
+    <node pkg="stage_ros" name="stage_ros" type="stageros" args="$(find slam_test)/world/aces.world">
+        <!-- Subscribed Topic -->
+        <remap from="cmd_vel" to="cmd_vel"/>
+        <!-- Published Topic -->
+        <remap from="base_scan" to="loc/scan"/>
+        <!-- ground truth with noise define in world file -->
+        <remap from="odom" to="odom"/>
+        <!-- <remap from="base_pose_ground_truth" to="sensor/base_pose_ground_truth"/> -->
+
+    </node>
+
+    <!--- Run Rviz -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find slam_test)/rviz/stage.rviz"/>
+    <!-- Run localization node -->
+    <include file="$(find laser_localization)/launch/stage_sim.launch" />
+    <!-- Run move_base -->
+    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+	    <rosparam file="$(find slam_test)/nav_param/costmap_common_params.yaml" command="load" ns="global_costmap" />
+	    <rosparam file="$(find slam_test)/nav_param/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find slam_test)/nav_param/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find slam_test)/nav_param/global_costmap_params.yaml" command="load" />
+	    <rosparam file="$(find slam_test)/nav_param/base_local_planner_params.yaml" command="load" />
+	    <!-- <rosparam file="$(find slam_test)/nav_param/base_global_planner_params.yaml" command="load" /> -->
+        <rosparam file="$(find slam_test)/nav_param/move_base_params.yaml" command="load" />
+	    <remap from="/cmd_vel" to="/cmd_vel"/>
+    </node>
+
+</launch>
