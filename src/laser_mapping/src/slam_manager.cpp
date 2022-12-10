@@ -110,14 +110,13 @@ SlamManager::SlamManager() : node_("~") {
         ros::spinOnce();
 
         while (mapping_stopped_) {
-          LOG(INFO) << "Mapping stopped by key Eenter Interrupt, to start click Enter again";
           boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
         }
 
         // 避免数据积压
         while (laser_mapping_ptr_->GetLaserBufferSize() > 40) {
           // 设置两级，避免卡顿
-          while(laser_mapping_ptr_->GetLaserBufferSize() > 10) {
+          while (laser_mapping_ptr_->GetLaserBufferSize() > 10) {
             boost::this_thread::sleep_for(boost::chrono::milliseconds(1));
           }
         }
@@ -132,7 +131,7 @@ SlamManager::SlamManager() : node_("~") {
       while (laser_mapping_ptr_->GetLaserBufferSize() != 0) {
         boost::this_thread::sleep_for(boost::chrono::milliseconds(20));
       }
-      LOG(INFO) << "slam end!!";
+      LOG(INFO) << "all lasers have been processed, slam end!!";
     }
   }
 
@@ -144,6 +143,9 @@ void SlamManager::KeyInputFunc() {
   while (ros::ok()) {
     getline(std::cin, line);
     mapping_stopped_ = !mapping_stopped_;
+    if(mapping_stopped_) {
+    LOG(WARNING) << "Mapping stopped by key Interrupt, to start click Enter again";
+    }
   }
 }
 

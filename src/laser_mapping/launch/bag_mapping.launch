@@ -4,12 +4,9 @@
 
     <!--- Run Rviz-->
     <node pkg="rviz" type="rviz" name="rviz" args="-d $(find laser_mapping)/rviz/slam_2d.rviz"/>
-
-<!--    <node pkg="tf" type="static_transform_publisher" name="base_laser_link_to_base_link"-->
-<!--          args="0.212 0 0.2 0 0 0 base_link base_laser_link 20"/>-->
-
+    <node pkg="tf" type="static_transform_publisher" name="base_laser_link_to_base_link" args="0.2056 0 0.6 0 0 0 base_link bluesea_lidar_link 20"/>
     <node pkg="laser_mapping" type="laser_mapping_node" name="slam" output="screen">
-        <remap from="/slam/scan" to="scan" />
+        <remap from="scan" to="scan" />
         <remap from="map" to="map" />
         <param name="simulation" value="true" />
         <!--  指定建图使用的rosbag完整路经 -->

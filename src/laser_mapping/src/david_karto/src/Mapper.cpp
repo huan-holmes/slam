@@ -467,8 +467,8 @@ kt_double ScanMatcher::CorrelateScan(LocalizedRangeScan *pScan, const Pose2 &rSe
 
   // kt_int32u poseResponseCounter = 0;
   // forEachAs(std::vector<kt_double>, &yPoses, yIter)
-#pragma omp parallel for num_threads(4) default(none) \
-    shared(yPoses, xPoses, rSearchCenter, nAngles, searchAngleResolution, searchAngleOffset, doPenalize, pPoseResponse)
+#pragma omp parallel for num_threads(4) default(none) shared( \
+    yPoses, xPoses, rSearchCenter, nAngles, searchAngleResolution, searchAngleOffset, doPenalize, pPoseResponse)
   for (int i = 0; i < yPoses.size(); ++i) {
     // kt_double y = *yIter;
     kt_double y = yPoses[i];
@@ -1120,19 +1120,12 @@ kt_bool MapperGraph::TryCloseLoop(LocalizedRangeScan *pScan, const Name &rSensor
   while (!candidateChain.empty()) {
     // mapping_status.is_calculating = 1;  // 发现回环 正在计算!
 
-    LOG(WARNING) << ("LOOP CLOSURE detected, Please stop for a while!");
-
     // mapping_loopclosure_state_pub.publish(mapping_status);
 
     Pose2 bestPose;
     Matrix3 covariance;
     // LOG(INFO)<<<<"fisrt mathch scan";
     kt_double coarseResponse = m_pLoopScanMatcher->MatchScan(pScan, candidateChain, bestPose, covariance, false, false);
-
-    LOG(INFO) << "loop -- orig CorrectedPose: " << pScan->GetCorrectedPose().GetX() << ","
-              << pScan->GetCorrectedPose().GetY();
-    LOG(INFO) << "loop -- coarseResponse: " << coarseResponse << ", pose: " << bestPose.GetX() << ","
-              << bestPose.GetY();
 
     // // 检测修正阈值，实际上不应该变差特别大
     // double diff_dist = (pScan->GetCorrectedPose().GetX() - bestPose.GetX())*(pScan->GetCorrectedPose().GetX() -
@@ -1153,16 +1146,12 @@ kt_bool MapperGraph::TryCloseLoop(LocalizedRangeScan *pScan, const Name &rSensor
     //}
 
     std::stringstream stream;
-    stream << "COARSE RESPONSE: " << coarseResponse << " (> "
-           << m_pMapper->m_pLoopMatchMinimumResponseCoarse->GetValue() << ")";
-    stream << "            var: " << covariance(0, 0) << ",  " << covariance(1, 1) << " (< "
-           << m_pMapper->m_pLoopMatchMaximumVarianceCoarse->GetValue() << ")";
+    const double MINIMUM_COARSE_RESPONSE = m_pMapper->m_pLoopMatchMinimumResponseCoarse->GetValue();
+    const double MAXIMUM_COARSE_RESPONSE = m_pMapper->m_pLoopMatchMaximumVarianceCoarse->GetValue();
+    const double fine_respone_threshold = m_pMapper->m_pLoopMatchMinimumResponseFine->GetValue();
 
-    m_pMapper->FireLoopClosureCheck(stream.str());
-
-    if ((coarseResponse > m_pMapper->m_pLoopMatchMinimumResponseCoarse->GetValue()) &&
-        (covariance(0, 0) < m_pMapper->m_pLoopMatchMaximumVarianceCoarse->GetValue()) &&
-        (covariance(1, 1) < m_pMapper->m_pLoopMatchMaximumVarianceCoarse->GetValue())) {
+    if ((coarseResponse > MINIMUM_COARSE_RESPONSE) && (covariance(0, 0) < MAXIMUM_COARSE_RESPONSE) &&
+        (covariance(1, 1) < MAXIMUM_COARSE_RESPONSE)) {
       LocalizedRangeScan tmpScan(pScan->GetSensorName(), pScan->GetRangeReadingsVector());
       tmpScan.SetUniqueId(pScan->GetUniqueId());
       tmpScan.SetTime(pScan->GetTime());
@@ -1174,30 +1163,27 @@ kt_bool MapperGraph::TryCloseLoop(LocalizedRangeScan *pScan, const Name &rSensor
       kt_double fineResponse =
           m_pMapper->m_pSequentialScanMatcher_loop->MatchScan(&tmpScan, candidateChain, bestPose, covariance, false);
       // m_pMapper->boost_mutex_.unlock();
-      std::stringstream stream1;
-      stream1 << "FINE RESPONSE: " << fineResponse << " (>" << m_pMapper->m_pLoopMatchMinimumResponseFine->GetValue()
-              << ")";
-      m_pMapper->FireLoopClosureCheck(stream1.str());
-
-      // mapping_status.fine_response = fineResponse;
-      LOG(INFO) << "loop -- fineResponse " << fineResponse << ", pose: " << bestPose.GetX() << "," << bestPose.GetY();
       if (fineResponse < m_pMapper->m_pLoopMatchMinimumResponseFine->GetValue()) {
-        LOG(WARNING) << ("REJECTED!");
-        m_pMapper->FireLoopClosureCheck("REJECTED!");
+        LOG(WARNING) << "FINE RESPONSE REJECTED: " << fineResponse << " threshold param: " << fine_respone_threshold;
       } else {
-        m_pMapper->FireBeginLoopClosure("Closing loop...");
-
         pScan->SetSensorPose(bestPose);
         LinkChainToScan(candidateChain, pScan, bestPose, covariance);
-        LOG(INFO) << "loop close covariance:" << covariance;
         CorrectPoses();
-
-        m_pMapper->FireEndLoopClosure("Loop closed!");
-
+        LOG(WARNING) << "COARSE RESPONSE ALLOWED: " << coarseResponse << ", pose: " << bestPose.GetX() << ","
+                     << bestPose.GetY();
+        LOG(WARNING) << "FINE RESPONSE ALLOWED: " << fineResponse << ", pose: " << bestPose.GetX() << ","
+                     << bestPose.GetY() << " SCANID: " << pScan->GetUniqueId();
+        LOG(INFO) << "FINE VAR: "
+                  << " cov(0, 0) " << covariance(0, 0) << " cov(1, 1) " << covariance(1, 1);
+        LOG(INFO) << "COARSE VAR: "
+                  << "cov(0, 0) " << covariance(0, 0) << " cov(1, 1) " << covariance(1, 1);
         loopClosed = true;
       }
+
     } else {
-      LOG(WARNING) << ("COARSE RESPONSE REJECTED!");
+      LOG(WARNING) << "COARSE RESPONSE REJECTED: " << coarseResponse
+                   << " MINIMUM_COARSE_RESPONSE:" << MINIMUM_COARSE_RESPONSE << " cov(0, 0) " << covariance(0, 0)
+                   << " cov(1, 1) " << covariance(1, 1) << " MAXIMUM_COARSE_RESPONSE:" << MAXIMUM_COARSE_RESPONSE;
     }
 
     candidateChain = FindPossibleLoopClosure(pScan, rSensorName, scanIndex);
@@ -2014,20 +2000,16 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
       Initialize(pLaserRangeFinder->GetRangeThreshold());
     }
 
-    // get last scan获取当前激光帧,
+    // 获取当前帧
     LocalizedRangeScan *pLastScan = m_pMapperSensorManager->GetLastScan(pScan->GetSensorName());
 
-    // update scans corrected pose based on last correction
-    // 根据已经优化过的历史帧的 修正当前帧的Corrected pose
     if (pLastScan != nullptr) {
-      // 得到上一次矫正过的位姿和里程计之间的变换
+      // 获取上次的矫正变换
       Transform lastTransform(pLastScan->GetOdometricPose(), pLastScan->GetCorrectedPose());
-      // 设定这次矫正过的位置
+      // 根据上次的变换更新下本次的位置
       pScan->SetCorrectedPose(lastTransform.TransformPose(pScan->GetOdometricPose()));
     }
 
-    // test if scan is outside minimum boundary or if heading is larger then minimum heading
-    // 通过里程计判断是否移动过指定的距离
     if (!HasMovedEnough(pScan, pLastScan) && !slam_process_end_flag_) {
       return false;
     }
@@ -2041,14 +2023,12 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
     for (int i = 0; i < m_pRangeReadings.size(); i++) {
       if (m_pRangeReadings[i] < pLaserRangeFinder->GetRangeThreshold()) cout_out++;
     }
-    double per = (double)cout_out / m_pRangeReadings.size();
 
-    // 当前帧 和历史帧runningscan 组 匹配 得到最佳的位置
     if (m_pUseScanMatching->GetValue() && pLastScan != nullptr) {
       Pose2 bestPose;
       kt_double res_score;
       // boost_mutex_.lock();
-      // LOG(INFO) << "scan size: " << m_pMapperSensorManager->GetRunningScans(pScan->GetSensorName()).size() <<
+      // 是否使用连续的running scan 作为子地图
       if (running_scan_) {
         res_score = m_pSequentialScanMatcher->MatchScan(
             pScan, m_pMapperSensorManager->GetRunningScans(pScan->GetSensorName()), bestPose, covariance);
@@ -2058,11 +2038,11 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
             pScan, FindNearScans(pScan, pScan->GetSensorName(), pLaserRangeFinder->GetRangeThreshold()), bestPose,
             covariance);
       }
-
-      LOG(INFO) << "current match score:" << res_score;
-
+      LOG(INFO) << "SCAN_ID: " << (m_pMapperSensorManager->getCurrentUniqueID() + 1) << " matching score:" << res_score;
+      // 当激光占比高于一定阈值 和 匹配分数达到一定阈值以后 才进行 激光位置的更新，否则不更新
+      double per = (double)cout_out / m_pRangeReadings.size();
       if (per > validLaserPercentage_ && res_score > minimumMatchScore_) {
-        // 如果角度变化很小，使用imu的yaw, (0.02rad = 1.15deg)
+        // yaw角度变化很小，use 陀螺仪的的yaw, (0.02rad = 1.15deg)
         if (m_pUseYawLineComp->GetValue() && fabs(bestPose.GetHeading() - last_pose2.GetHeading()) < 0.02) {
           bestPose.SetHeading(pScan->GetOdometricPose().GetHeading());
           LOG(INFO) << "using odom yaw!";
@@ -2071,12 +2051,10 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
         }
 
       } else {
-        // 得到上一次矫正过的位姿和里程计之间的变换
         // 设定这次矫正过的位置
         LOG(INFO) << "using odom as scan pose!!!!!!!!";
         pScan->SetSensorPose2();
       }
-
       last_pose2 = pScan->GetCorrectedPose();
     }
 
@@ -2107,7 +2085,8 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
         std::vector<Name> deviceNames = m_pMapperSensorManager->GetSensorNames();
         const_forEach(std::vector<Name>, &deviceNames) {
           if (m_pGraph->TryCloseLoop(&tmpScan, *iter)) {
-            LOG(INFO) << ("manually close loop succesfully!!");
+            LOG(INFO) << "SCAN_ID: " << m_pMapperSensorManager->getCurrentUniqueID()
+                      << (" manually close loop succesfully!!");
           } else {
             LOG(WARNING) << ("manually close loop failed!!");
           }
@@ -2115,20 +2094,21 @@ kt_bool Mapper::Process(LocalizedRangeScan *pScan, double current_time) {
         m_pGraph->manual_loop_closure_flag = false;
       } else if (m_pDoLoopClosing->GetValue()) {
         // 时间检查，如果当前帧时间明显滞后，不做回环处理
-        double lag_time = ros::Time::now().toSec() - current_time;
+        // double lag_time = ros::Time::now().toSec() - current_time;
         /*if (lag_time < 0.5)*/ {
           std::vector<Name> deviceNames = m_pMapperSensorManager->GetSensorNames();
           const_forEach(std::vector<Name>, &deviceNames) {
             if (m_pGraph->TryCloseLoop(pScan, *iter)) {
-              LOG(WARNING) << ("auto close loop succesfully!!");
+              LOG(INFO) << "SCAN_ID: " << m_pMapperSensorManager->getCurrentUniqueID()
+                        << (" auto close loop succesfully!!");
             }
           }
         }
-        LOG(INFO) << "current scan is behind time::now (ms): " << lag_time * 1e3;
+        // LOG(INFO) << "current scan is behind time::now (ms): " << lag_time * 1e3;
       }
       auto end_time = ros::WallTime::now();
       double delta_time = (end_time - start_time).toSec();
-      LOG(INFO) << "loop ms: " << delta_time * 1e3;
+      LOG(INFO) << "SCAN_ID: " << m_pMapperSensorManager->getCurrentUniqueID() << " process ms: " << delta_time * 1e3;
     }
 
     m_pMapperSensorManager->SetLastScan(pScan);

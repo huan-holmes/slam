@@ -55,7 +55,7 @@ class LaserMapping {
   karto::LaserRangeFinder *GetLaserRangeFinder(const sensor_msgs::LaserScan::ConstPtr &scan);
   bool AddScan(karto::LaserRangeFinder *laser, sensor_msgs::LaserScan::ConstPtr &scan, karto::Pose2 &karto_pose);
   bool PublishRosMap();
-  void PublishMapThread();
+  void PublishMapOnce();
   void RotateProcessedScans(double rad);
   void PublishTransform();
   void PublishTFLoop();
@@ -112,8 +112,8 @@ class LaserMapping {
   std::queue<sensor_msgs::LaserScan::ConstPtr> laser_scans_buffer_;
 
   // 是否已经生成过地图
-  bool map_updated_flag_{false};
-  bool is_map_updating_ = false;
+  bool first_map_updated_flag_{false};
+  bool is_map_publishing_ = false;
   ros::WallTime last_map_update_;
 
   // 接收到激光的次数
@@ -130,7 +130,9 @@ class LaserMapping {
   bool b_publish_graph_marker_{};
   bool b_exit_pub_tf_thread_;
   double scan_range_max_{};
-  bool slam_finished_flag_;
+  double laser_x_offset_, laser_y_offset_, laser_yaw_offset_;
+  int keyframe_cnt_ = 0;
+  bool slam_stop_request_flag_;
   bool slam_process_end_;
   bool use_imu_correct_;
   // bool laser_first_in_;

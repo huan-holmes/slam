@@ -20,7 +20,7 @@
 
 LaserMapping::LaserMapping(ros::NodeHandle &nh, bool is_simulation)
     : node_handle_(nh),
-      map_updated_flag_(false),
+      first_map_updated_flag_(false),
       is_simulation_(is_simulation),
       laser_freq_count_(0),
       marker_count_(0),
@@ -77,6 +77,13 @@ LaserMapping::LaserMapping(ros::NodeHandle &nh, bool is_simulation)
   private_nh.param("publish_graph_marker", b_publish_graph_marker_, false);
   // private_nh_.param("loop_check_peirod", loop_check_peirod_, 1.0);
   private_nh.param("mapping_max_scanRange", scan_range_max_, 8.0);
+
+  // 获取激光外参数
+  private_nh.param("laser_x_offset", laser_x_offset_, 0.0);
+  private_nh.param("laser_y_offset", laser_y_offset_, 0.0);
+  private_nh.param("laser_yaw_offset", laser_yaw_offset_, 0.0);
+  LOG(INFO) << "laser param laser_x_offset: " << laser_x_offset_ << " laser_y_offset: " << laser_y_offset_
+            << " laser_yaw_offset: " << laser_yaw_offset_;
 
   LOG(INFO) << "scan_range max" << scan_range_max_;
   bool use_scan_matching;
@@ -206,10 +213,6 @@ LaserMapping::LaserMapping(ros::NodeHandle &nh, bool is_simulation)
   if (node_handle_.getParam("validLaserPercentage", validLaserPercentage))
     mapper_->setValidLaserPercent(validLaserPercentage);
 
-  // end_slam_loop_closure_ = false;
-  // if (private_nh.getParam("end_slam_loop_closure", end_slam_loop_closure_)) {
-  // }
-
   use_imu_correct_ = node_handle_.param("use_imu_correct", false);
   mapper_->setParamUseYawLineComp(use_imu_correct_);
   if (use_imu_correct_) {
@@ -219,14 +222,14 @@ LaserMapping::LaserMapping(ros::NodeHandle &nh, bool is_simulation)
   // Set solver to be used in loop closure
   solver_ = new SpaSolver();
   mapper_->SetScanSolver(solver_);
-  slam_finished_flag_ = false;
+  slam_stop_request_flag_ = false;
   slam_process_end_ = false;
   // laser_first_in_ = false;
   main_process_thread_ = boost::thread(boost::bind(&LaserMapping::ProcessMainLoop, this));
 }
 
 void LaserMapping::Termination() {
-  slam_finished_flag_ = true;
+  slam_stop_request_flag_ = true;
   b_exit_pub_tf_thread_ = true;
   if (pub_tf_thread_.joinable()) {
     pub_tf_thread_.join();
@@ -263,7 +266,7 @@ void LaserMapping::PublishTFLoop() {
         LOG(WARNING) << "scan low freq ,current is: " << laser_freq_count_;
         slam_diagnostic_mode_ = common_msg::SlamMode::SLAM_ERROR_SCAN_LOW_FREQ;
       } else {
-        if (slam_finished_flag_) {
+        if (slam_stop_request_flag_) {
           slam_diagnostic_mode_ = common_msg::SlamMode::SLAM_UPDATING;
         } else {
           slam_diagnostic_mode_ = common_msg::SlamMode::SLAM_RUNNING;
@@ -365,7 +368,7 @@ karto::LaserRangeFinder *LaserMapping::GetLaserRangeFinder(const sensor_msgs::La
     std::string name = scan->header.frame_id;
     karto::LaserRangeFinder *laser =
         karto::LaserRangeFinder::CreateLaserRangeFinder(karto::LaserRangeFinder_Custom, karto::Name(name));
-    laser->SetOffsetPose(karto::Pose2(0., 0., 0.));
+    laser->SetOffsetPose(karto::Pose2(laser_x_offset_, laser_y_offset_, laser_yaw_offset_));
     laser->SetMinimumRange(scan->range_min);
     // range max
     laser->SetMaximumRange(scan->range_max);
@@ -519,7 +522,7 @@ void LaserMapping::OdomCallBack(const nav_msgs::Odometry::ConstPtr &odom_msg) {
 
 void LaserMapping::LaserCallback(const sensor_msgs::LaserScan::ConstPtr &scan) {
   laser_freq_count_++;
-  if ((laser_freq_count_ % throttle_scans_) != 0 && !slam_finished_flag_) return;
+  if ((laser_freq_count_ % throttle_scans_) != 0 && !slam_stop_request_flag_) return;
   {
     boost::mutex::scoped_lock lock(laser_mtx_);
     laser_scans_buffer_.push(scan);
@@ -784,9 +787,9 @@ void LaserMapping::RotateMapCallback(const common_msg::RotateMap &msg) {
   LOG(INFO) << "Rotate Map Done!";
 }
 
-void LaserMapping::PublishMapThread() {
-  if (is_map_updating_) return;
-  if (!map_updated_flag_ || (ros::WallTime::now() - last_map_update_).toSec() > map_update_interval_) {
+void LaserMapping::PublishMapOnce() {
+  if (is_map_publishing_) return;
+  if (!first_map_updated_flag_ || (ros::WallTime::now() - last_map_update_).toSec() > map_update_interval_) {
     // 创建后台线程去发布地图
     std::thread publish_thread(std::bind(&LaserMapping::PublishRosMap, this));
     publish_thread.detach();
@@ -795,7 +798,7 @@ void LaserMapping::PublishMapThread() {
 
 bool LaserMapping::PublishRosMap() {
   if (!mapper_) return false;
-  is_map_updating_ = true;
+  is_map_publishing_ = true;
   boost::mutex::scoped_lock lock(map_mutex_);
 
   auto start_time = ros::WallTime::now();
@@ -808,7 +811,7 @@ bool LaserMapping::PublishRosMap() {
     return false;
   }
 
-  if (!map_updated_flag_) {
+  if (!first_map_updated_flag_) {
     map_.map.info.resolution = resolution_;
     map_.map.info.origin.position.x = 0.0;
     map_.map.info.origin.position.y = 0.0;
@@ -866,9 +869,9 @@ bool LaserMapping::PublishRosMap() {
   auto end_time = ros::WallTime::now();
   double delta_time = (end_time - start_time).toSec() * 1e3;
 
-  LOG(INFO) << "Update map process time : " << delta_time << " ms";
-  is_map_updating_ = false;
-  map_updated_flag_ = true;
+  LOG(INFO) << "Update ros map process time : " << delta_time << " ms";
+  is_map_publishing_ = false;
+  first_map_updated_flag_ = true;
   last_map_update_ = ros::WallTime::now();
   return true;
 }
@@ -879,7 +882,6 @@ void LaserMapping::ProcessMainLoop() {
   // 帧缓存大于2认为忙
   bool last_mapping_busy_flag = false;
   bool mapping_busy_flag = false;
-  int keyframe_cnt = 0;
 
   std_msgs::UInt8 working_state_msg;
   // 初始化发送正常
@@ -946,46 +948,38 @@ void LaserMapping::ProcessMainLoop() {
           max_process_time_ = delta_time;
         }
 
-        keyframe_cnt++;
-
-        LOG(INFO) << fixed << setprecision(3) << " process time ms: " << delta_time
+        LOG(INFO) << fixed << setprecision(3) << "SCAN_ID: " << keyframe_cnt_ << " process time ms: " << delta_time
                   << " max_process_time: " << max_process_time_ << " scan buffer: " << laser_scans_buffer_.size()
-                  << ", keyframe: " << keyframe_cnt << ", laser time: " << scan_ptr->header.stamp.toSec()
+                  << ", laser time: " << scan_ptr->header.stamp.toSec()
                   << ", odom time: " << odom_ptr->header.stamp.toSec();
+        keyframe_cnt_++;
 
         if (is_simulation_) {
           PublishGraphVisualization();
         }
-
-        PublishMapThread();
+        PublishMapOnce();
       }
-
     } else {
+      // 等待新的激光进来更新
       usleep(10 * 1000);
-
-      if (slam_finished_flag_) {
-        if (!map_updated_flag_) {
+      // 等待建图结束信号
+      if (slam_stop_request_flag_) {
+        if (!first_map_updated_flag_) {
           LOG(ERROR) << "no map updated";
-          slam_process_end_ = true;
-          // 防止再次进来
-          slam_finished_flag_ = false;
-          is_exit = true;
-          continue;
+        } else {
+          // Publish final ros map.
+          PublishRosMap();
         }
-
         // 此处结束建图
         mapper_->TriggerFinishSlam(0);
-
-        if (PublishRosMap()) {
-          slam_process_end_ = true;
-          // 防止再次进来
-          slam_finished_flag_ = false;
-          is_exit = true;
-          continue;
-        }
+        slam_process_end_ = true;
+        slam_stop_request_flag_ = false;
+        keyframe_cnt_ = 0;
+        is_exit = true;
       }
     }
 
+    // Publish Working state.
     mapping_busy_flag = laser_scans_buffer_.size() > 2;
     if (last_mapping_busy_flag != mapping_busy_flag) {
       last_mapping_busy_flag = mapping_busy_flag;
@@ -1029,8 +1023,8 @@ bool LaserMapping::AddScan(karto::LaserRangeFinder *laser, sensor_msgs::LaserSca
 
   if (processed) {
     karto::Pose2 corrected_pose = range_scan->GetCorrectedPose();
-    LOG(INFO) << "add corrected pose, x, y, yaw: " << corrected_pose.GetX() << " " << corrected_pose.GetY() << " "
-              << corrected_pose.GetHeading();
+    LOG(INFO) << "SCAN_ID: " << keyframe_cnt_ << " add corrected pose, x, y, yaw: " << corrected_pose.GetX() << " "
+              << corrected_pose.GetY() << " " << corrected_pose.GetHeading();
 
     // ---------------------- Compute the map->odom transform
 
@@ -1057,13 +1051,13 @@ bool LaserMapping::AddScan(karto::LaserRangeFinder *laser, sensor_msgs::LaserSca
 
 bool LaserMapping::MapCallback(nav_msgs::GetMap::Request &req, nav_msgs::GetMap::Response &res) {
   boost::mutex::scoped_lock lock(map_mutex_);
-  if (map_updated_flag_ && map_.map.info.width && map_.map.info.height) {
+  if (first_map_updated_flag_ && map_.map.info.width && map_.map.info.height) {
     res = map_;
     return true;
   } else
     return false;
 }
 
-void LaserMapping::EndSLAM() { slam_finished_flag_ = true; }
+void LaserMapping::EndSLAM() { slam_stop_request_flag_ = true; }
 
 bool LaserMapping::GetStatusEnd() const { return slam_process_end_; }

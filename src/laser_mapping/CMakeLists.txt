@@ -38,13 +38,6 @@ find_package(catkin REQUIRED COMPONENTS
     rosbag_storage
 )
 
-catkin_package(
-#   INCLUDE_DIRS include 3rdparty/laser_mapping_node/include
-  LIBRARIES david_karto sba spa_solver tools
-  CATKIN_DEPENDS roscpp nav_msgs sensor_msgs common_msg tf
-#   DEPENDS david_karto sba spa_solver
-)
-
 # 设置动态生成位置
 set(SHARED_LIB_PATH ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/lib)
 message(STATUS "SHARED_LIB_PATH: ${SHARED_LIB_PATH}")
@@ -90,7 +83,12 @@ target_link_libraries(${PROJECT_NAME}_node
     tools
     )
 
-
+catkin_package(
+#   INCLUDE_DIRS include 3rdparty/laser_mapping_node/include
+  LIBRARIES david_karto sba spa_solver tools
+  CATKIN_DEPENDS roscpp nav_msgs sensor_msgs common_msg tf
+#   DEPENDS david_karto sba spa_solver
+)
 
 # Mark other files for installation (e.g. launch and bag files, etc.)
 install(DIRECTORY

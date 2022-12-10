@@ -1,3 +1,7 @@
+# 设置激光外参数
+laser_x_offset: 0.2049
+laser_y_offset: 0.0
+laser_yaw_offset: 0.0
 
 # 设置激光有效距离
 mapping_max_scanRange: 20
